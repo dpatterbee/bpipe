@@ -32,7 +32,7 @@ func (b *Bpipe) Read(p []byte) (n int, err error) {
 
 	defer b.c.Signal()
 
-	for b.buf.Len() >= len(p) && !b.pipeClosed {
+	for b.buf.Len() < len(p) && !b.pipeClosed {
 
 		b.c.Wait()
 
