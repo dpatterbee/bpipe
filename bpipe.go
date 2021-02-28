@@ -8,19 +8,53 @@ import (
 
 // Bpipe is a bytes.Buffer with a sync.Cond to allow for channel-like behaviour.
 type Bpipe struct {
-	buf        bytes.Buffer
-	c          *sync.Cond
-	pipeClosed bool
+	writeChan       chan []byte
+	readRequestChan chan int
+	readChan        chan []byte
+	closed          chan struct{}
 }
 
-// New creates a new Bpipe
-func New() *Bpipe {
-	var l sync.Mutex
+type bpipeReader struct {
+	// fields
+	bpipe *Bpipe
+}
 
-	return &Bpipe{
-		buf:        bytes.Buffer{},
-		c:          sync.NewCond(&l),
-		pipeClosed: false,
+type bpipeWriter struct {
+	// fields
+	bpipe *Bpipe
+}
+
+func New() (bpipeReader, bpipeWriter) {
+
+	b := &Bpipe{}
+
+	go piper(&b)
+
+	return bpipeReader{bpipe: &b}, bpipeWriter{bpipe: &b}
+}
+
+func piper(bpipe *Bpipe) {
+	var buf bytes.Buffer
+	var reqs []int
+
+	for !bpipe.closed {
+		if len(reqs) > 0 {
+			if buf.Len() >= reqs[0] {
+				s := make([]byte, reqs[0])
+				buf.Read(s)
+				reqs = reqs[1:]
+			}
+		}
+
+		select {
+		case p := <-bpipe.WriteChan:
+			buf.Write(p)
+		case p := <-bpipe.readRequestChan:
+
+			reqs = append(reqs, p)
+		case <-bpipe.closed:
+			return
+		}
 	}
 }
 
