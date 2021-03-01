@@ -10,6 +10,7 @@ import (
 type Bpipe struct {
 	buf        bytes.Buffer
 	c          *sync.Cond
+	once       sync.Once
 	pipeClosed bool
 }
 
@@ -50,7 +51,7 @@ func (b *Bpipe) Write(p []byte) (n int, err error) {
 	defer b.c.Signal()
 
 	if b.pipeClosed {
-		return 0, io.ErrUnexpectedEOF
+		return 0, io.ErrClosedPipe
 	}
 
 	n, err = b.buf.Write(p)
@@ -64,13 +65,10 @@ func (b *Bpipe) Close() error {
 	b.c.L.Lock()
 	defer b.c.L.Unlock()
 
-	if b.pipeClosed {
-		return nil
-	}
-
-	b.pipeClosed = true
-
-	defer b.c.Signal()
+	b.once.Do(func() {
+		b.pipeClosed = true
+		b.c.Signal()
+	})
 
 	return nil
 }
