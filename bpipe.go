@@ -24,7 +24,12 @@ type BpipeWriter struct {
 
 func New() (BpipeReader, BpipeWriter) {
 
-	b := Bpipe{}
+	b := Bpipe{
+		writeChan:       make(chan []byte),
+		readRequestChan: make(chan int),
+		readChan:        make(chan []byte),
+		closed:          make(chan struct{}),
+	}
 
 	go piper(&b)
 
@@ -35,12 +40,14 @@ func piper(bpipe *Bpipe) {
 	var buf bytes.Buffer
 	var reqs []int
 
+mainLoop:
 	for {
 		if len(reqs) > 0 {
 			if buf.Len() >= reqs[0] {
 				s := make([]byte, reqs[0])
 				buf.Read(s)
 				reqs = reqs[1:]
+				bpipe.readChan <- s
 			}
 		}
 
@@ -48,11 +55,22 @@ func piper(bpipe *Bpipe) {
 		case p := <-bpipe.writeChan:
 			buf.Write(p)
 		case p := <-bpipe.readRequestChan:
-
 			reqs = append(reqs, p)
 		case <-bpipe.closed:
-			return
+			break mainLoop
 		}
+	}
+
+	for len(reqs) > 0 {
+		var s []byte
+		if reqs[0] > buf.Len() {
+			s = make([]byte, buf.Len())
+		} else {
+			s = make([]byte, reqs[0])
+		}
+		reqs = reqs[1:]
+		buf.Read(s)
+		bpipe.readChan <- s
 	}
 }
 
@@ -69,9 +87,10 @@ func (b *BpipeReader) Read(p []byte) (n int, err error) {
 
 // Write writes n bytes from p into the buffer then signals any waiting reader.
 func (b *BpipeWriter) Write(p []byte) (n int, err error) {
-
+	err = nil
+	n = len(p)
 	b.bpipe.writeChan <- p
-	return len(p), nil
+	return
 
 }
 
