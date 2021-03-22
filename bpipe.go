@@ -25,8 +25,10 @@ func New() *Bpipe {
 	}
 }
 
-// Read waits for either b to be closed or to contain enough data to fill p then reads n bytes into p and signals another waiting reader.
-// The read will wait indefinitely if no further writes are made and the bpipe is never closed.
+// Read waits for either b to be closed or to contain enough data to fill p the
+// n reads n bytes into p and signals another waiting reader.
+// The read will wait indefinitely if no further writes are made and the bpipe
+// is never closed.
 func (b *Bpipe) Read(p []byte) (n int, err error) {
 	b.c.L.Lock()
 	defer b.c.L.Unlock()
